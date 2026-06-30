@@ -9,6 +9,7 @@
             --bg-color: #121212;
             --card-bg: #1e1e1e;
             --accent-color: #06d6a0;
+            --blue-color: #3a86ff;
             --text-color: #ffffff;
             --text-muted: #a0a0a0;
         }
@@ -56,7 +57,6 @@
 
         button {
             width: 100%;
-            background-color: var(--accent-color);
             color: #121212;
             border: none;
             padding: 14px;
@@ -65,9 +65,24 @@
             border-radius: 8px;
             cursor: pointer;
             transition: background 0.2s;
+            margin-top: 5px;
         }
 
-        button:active { background-color: #04b888; }
+        .btn-start { background-color: var(--blue-color); color: white; }
+        .btn-start:active { background-color: #2a6fdf; }
+        
+        .btn-end { background-color: var(--accent-color); }
+        .btn-end:active { background-color: #04b888; }
+
+        .status-box {
+            background-color: rgba(58, 134, 255, 0.15);
+            border: 1px solid var(--blue-color);
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 15px;
+        }
 
         .result-box {
             display: grid;
@@ -97,26 +112,33 @@
 </head>
 <body>
 
-    <h2>🚗 Uber Km Tracker</h2>
+    <h2>🚗 Uber Km Tracker v2</h2>
 
-    <div class="card">
+    <div id="statusContainer" style="display: none;"></div>
+
+    <div class="card" id="cardInicio">
         <div class="form-group">
-            <label>🏁 KM Inicial</label>
+            <label>🛫 KM Inicial (Al salir de casa)</label>
             <input type="number" id="kmInicial" placeholder="Ej. 45000" inputmode="numeric">
         </div>
+        <button class="btn-start" onclick="iniciarTurno()">🛫 Iniciar Turno</button>
+    </div>
+
+    <div class="card" id="cardFin" style="display: none;">
         <div class="form-group">
-            <label>🏁 KM Final</label>
+            <label>🏁 KM Final (Al terminar el día)</label>
             <input type="number" id="kmFinal" placeholder="Ej. 45180" inputmode="numeric">
         </div>
         <div class="form-group">
-            <label>💰 Ganancia del Turno ($)</label>
+            <label>💰 Ganancia Total del Turno ($)</label>
             <input type="number" id="ganancia" placeholder="Ej. 350" inputmode="numeric">
         </div>
-        <button onclick="calcularYGuardar()">Calcular y Registrar Turno</button>
+        <button class="btn-end" onclick="finalizarTurno()">🏁 Finalizar y Registrar Turno</button>
+        <button onclick="cancelarTurnoActual()" style="background: transparent; color: #ff4d4d; font-size: 13px; margin-top: 10px; padding: 5px;">❌ Cancelar Turno Actual</button>
     </div>
 
     <div class="card" id="resultadosCard" style="display:none;">
-        <label>📊 Resumen del Turno:</label>
+        <label>📊 Resumen del Último Turno:</label>
         <div class="result-box">
             <div class="stat">Distancia<div class="stat-val" id="resKm">0 km</div></div>
             <div class="stat">Rendimiento<div class="stat-val" id="resRent">$0.00/km</div></div>
@@ -126,49 +148,90 @@
     <div class="card">
         <label>📅 Historial de Rutas</label>
         <div id="historial" style="margin-top: 10px;"></div>
-        <button onclick="limpiarHistorial()" style="background: #ff4d4d; color: white; margin-top: 15px; padding: 8px; font-size: 12px;">Borrar Historial</button>
+        <button onclick="limpiarHistorial()" style="background: #ff4d4d; color: white; margin-top: 15px; padding: 8px; font-size: 12px; font-weight: normal;">Borrar Historial Completo</button>
     </div>
 
     <script>
-        // Cargar historial al iniciar
-        document.addEventListener("DOMContentLoaded", mostrarHistorial);
+        document.addEventListener("DOMContentLoaded", () => {
+            verificarTurnoActivo();
+            mostrarHistorial();
+        });
 
-        function calcularYGuardar() {
+        function verificarTurnoActivo() {
+            const kmInGuardado = localStorage.getItem('uberKmInicialActivo');
+            const statusContainer = document.getElementById('statusContainer');
+            const cardInicio = document.getElementById('cardInicio');
+            const cardFin = document.getElementById('cardFin');
+
+            if (kmInGuardado) {
+                statusContainer.innerHTML = `<div class="status-box">aktiv⏳ <b>Turno en progreso</b><br>KM Inicial guardado: <b>${kmInGuardado} km</b></div>`;
+                statusContainer.style.display = "block";
+                cardInicio.style.display = "none";
+                cardFin.style.display = "block";
+            } else {
+                statusContainer.style.display = "none";
+                cardInicio.style.display = "block";
+                cardFin.style.display = "none";
+            }
+        }
+
+        function iniciarTurno() {
             const kmIn = parseFloat(document.getElementById('kmInicial').value);
+            if (isNaN(kmIn) || kmIn <= 0) {
+                alert("Por favor, ingresa un kilometraje inicial válido.");
+                return;
+            }
+            localStorage.setItem('uberKmInicialActivo', kmIn);
+            document.getElementById('kmInicial').value = '';
+            verificarTurnoActivo();
+        }
+
+        function finalizarTurno() {
+            const kmIn = parseFloat(localStorage.getItem('uberKmInicialActivo'));
             const kmFin = parseFloat(document.getElementById('kmFinal').value);
             const ganancia = parseFloat(document.getElementById('ganancia').value);
 
-            if (isNaN(kmIn) || !kmFin || isNaN(ganancia) || kmFin <= kmIn) {
-                alert("Por favor, llena los campos con datos válidos. El KM Final debe ser mayor.");
+            if (isNaN(kmFin) || isNaN(ganancia) || kmFin <= kmIn) {
+                alert("El KM Final debe ser un número mayor al KM Inicial (" + kmIn + " km).");
                 return;
             }
 
-            // Cálculos
             const kmTotales = kmFin - kmIn;
             const rendimiento = ganancia / kmTotales;
 
-            // Mostrar en pantalla actual
+            // Mostrar en panel de resultados
             document.getElementById('resKm').innerText = kmTotales + " km";
             document.getElementById('resRent').innerText = "$" + rendimiento.toFixed(2) + "/km";
             document.getElementById('resultadosCard').style.display = "block";
 
-            // Guardar en LocalStorage
+            // Guardar en el Historial definitivo
             const registro = {
                 fecha: new Date().toLocaleDateString(),
+                kmInicial: kmIn,
+                kmFinal: kmFin,
                 kmTotales: kmTotales,
                 rendimiento: rendimiento.toFixed(2),
                 ganancia: ganancia
             };
 
             let historial = JSON.parse(localStorage.getItem('uberLogs')) || [];
-            historial.unshift(registro); // Agregar al inicio
+            historial.unshift(registro);
             localStorage.setItem('uberLogs', JSON.stringify(historial));
 
-            // Actualizar vista del historial y limpiar inputs
-            mostrarHistorial();
-            document.getElementById('kmInicial').value = '';
+            // Limpiar estado activo
+            localStorage.removeItem('uberKmInicialActivo');
             document.getElementById('kmFinal').value = '';
             document.getElementById('ganancia').value = '';
+
+            verificarTurnoActivo();
+            mostrarHistorial();
+        }
+
+        function cancelarTurnoActual() {
+            if (confirm("¿Quieres borrar el KM inicial de hoy y empezar de nuevo?")) {
+                localStorage.removeItem('uberKmInicialActivo');
+                verificarTurnoActivo();
+            }
         }
 
         function mostrarHistorial() {
@@ -177,7 +240,7 @@
             container.innerHTML = '';
 
             if (historial.length === 0) {
-                container.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">No hay registros aún.</p>';
+                container.innerHTML = '<p style="color:var(--text-muted); font-size:14px;">No hay registros guardados.</p>';
                 return;
             }
 
@@ -186,7 +249,8 @@
                 el.className = 'history-item';
                 el.innerHTML = `
                     <div class="history-date">${item.fecha}</div>
-                    <div><b>${item.kmTotales} km</b> rodados | Ganancia: <b>$${item.ganancia}</b></div>
+                    <div><b>${item.kmTotales} km</b> rodados (${item.kmInicial} ➔ ${item.kmFinal})</div>
+                    <div>Ganancia: <b>$${item.ganancia}</b></div>
                     <div style="color: var(--accent-color)">Rendimiento: $${item.rendimiento}/km</div>
                 `;
                 container.appendChild(el);
@@ -194,7 +258,7 @@
         }
 
         function limpiarHistorial() {
-            if (confirm("¿Seguro que quieres borrar todos los registros?")) {
+            if (confirm("¿Seguro que quieres borrar todo tu historial acumulado?")) {
                 localStorage.removeItem('uberLogs');
                 mostrarHistorial();
                 document.getElementById('resultadosCard').style.display = "none";
